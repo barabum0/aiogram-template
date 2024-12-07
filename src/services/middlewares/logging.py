@@ -8,8 +8,11 @@ from aiogram.types import (
     ChatBoostRemoved,
     ChatBoostUpdated,
     ChatJoinRequest,
+    ChatMemberBanned,
+    ChatMemberLeft,
     ChatMemberUpdated,
     ChosenInlineResult,
+    InaccessibleMessage,
     InlineQuery,
     Message,
     MessageReactionCountUpdated,
@@ -23,10 +26,14 @@ from aiogram.types import (
 )
 from loguru import logger
 
-from src.services.formatters.logs import chat_log, location, reaction, shipping_address
-
-message_format_dict = {"<": r"\<", "\n": "<light-yellow>\\n</light-yellow>"}
-message_format_translate = str.maketrans(message_format_dict)
+from src.services.formatters.logs import (
+    chat_log,
+    location,
+    message_content,
+    message_format_translate,
+    reaction,
+    shipping_address,
+)
 
 
 async def logger_middleware(
@@ -47,107 +54,7 @@ async def logger_middleware(
         ):
             message: Message = cast(Message, event.event)
 
-            log_message = chat_log(message.from_user)
-
-            match message.content_type:
-                case ContentType.TEXT:
-                    message_text = message.text.translate(message_format_translate)
-                    log_message += f" - <yellow>{message_text}</yellow>"
-                case ContentType.AUDIO:
-                    log_message += f" - <green>🎶 {message.audio.title.translate(message_format_translate) if message.audio.title is not None else "Audio"} by {message.audio.performer.translate(message_format_translate) if message.audio.performer is not None else "Unknown"}</green>"
-                case ContentType.ANIMATION:
-                    log_message += " - <green>🤡 Animation</green>"
-                case ContentType.DOCUMENT:
-                    log_message += f" - <green>📄 {message.document.file_name.translate(message_format_translate) if message.document.file_name is not None else "Document"}{f'<fg 127,127,127>({message.document.file_size} bytes)</fg 127,127,127>' if message.document.file_size else ''}</green>"
-                case ContentType.GAME:
-                    log_message += f" - <green>🎮 {message.game.title.translate(message_format_translate)}</green> - <blue>{message.game.description.translate(message_format_translate)}</blue>"
-                    if message.game.text:
-                        game_text = message.game.text.translate(message_format_translate)
-                        log_message += f"- <yellow>{game_text}</yellow>"
-                case ContentType.PHOTO:
-                    log_message += " - <green>🖼️ Photos</green>"
-                case ContentType.STICKER:
-                    log_message += f" - <magenta>💌 Sticker{f'<fg 127>[{message.sticker.set_name}]</fg 127>' if message.sticker.set_name else ''}{f'<fg 127>({message.sticker.emoji})</fg 127>' if message.sticker.emoji else ''}</magenta>"
-                case ContentType.STORY:
-                    log_message += f" forwarded a story from {chat_log(message.story.chat)}"
-                case ContentType.VIDEO:
-                    log_message += f" - <green>📺 {message.video.file_name.translate(message_format_translate) if message.video.file_name is not None else "Video"}{f'<fg 127,127,127>({message.video.file_size} bytes)</fg 127,127,127>' if message.video.file_size else ''}</green>"
-                case ContentType.VIDEO_NOTE:
-                    log_message += " - <green>⚪ Video note</green>"
-                case ContentType.VOICE:
-                    log_message += " - <green>🔊 Voice message</green>"
-                case ContentType.CONTACT:
-                    log_message += f" sent <cyan>{f'{message.contact.first_name} {message.contact.last_name}'.strip()}</cyan>{f'<blue>[{message.contact.user_id}]</blue>' if message.contact.user_id else ''} contact with phone <red>{message.contact.phone_number}<red>"
-                case ContentType.DICE:
-                    log_message += f" - <magenta>{message.dice.emoji} Dice - {message.dice.value}<magenta>"
-                case ContentType.POLL:
-                    log_message += f" sent a poll <red>{message.poll.question}</red><light-red>[{message.poll.id}]</light-red> with options <yellow>[{', '.join(o.text for o in message.poll.options)}]</yellow>"
-                case ContentType.VENUE:
-                    log_message += (
-                        f" - 📍 Venue <green>{message.venue.address}</green> - {location(message.venue.location)}"
-                    )
-                case ContentType.LOCATION:
-                    log_message += f" - 🗺️ Location {location(message.location)}"
-                case ContentType.NEW_CHAT_MEMBERS:
-                    if message.from_user.id == message.new_chat_members[0].id:
-                        log_message += " joined"
-                    else:
-                        log_message += f" added [{', '.join(chat_log(u) for u in message.new_chat_members)}]"
-                case ContentType.LEFT_CHAT_MEMBER:
-                    if message.from_user.id == message.left_chat_member.id:
-                        log_message += " left"
-                    else:
-                        log_message += f" kicked {chat_log(message.left_chat_member)} from"
-                case ContentType.NEW_CHAT_TITLE:
-                    log_message += f" changed title to <green>{message.new_chat_title}</green>"
-                case ContentType.NEW_CHAT_PHOTO:
-                    log_message += " changed chat photo"
-                case ContentType.DELETE_CHAT_PHOTO:
-                    log_message += " deleted chat photo"
-                case ContentType.GROUP_CHAT_CREATED:
-                    log_message += " created group chat"
-                case ContentType.SUPERGROUP_CHAT_CREATED:
-                    log_message += " created supergroup chat"
-                case ContentType.CHANNEL_CHAT_CREATED:
-                    log_message += " created channel chat"
-                case ContentType.MESSAGE_AUTO_DELETE_TIMER_CHANGED:
-                    log_message += f" changed message auto delete timer to {message.message_auto_delete_timer_changed.message_auto_delete_time} seconds"
-                case ContentType.MIGRATE_TO_CHAT_ID:
-                    log_message += f" migrated to chat {chat_log(message.migrate_to_chat_id)}"
-                case ContentType.MIGRATE_FROM_CHAT_ID:
-                    log_message += f" migrated from chat {chat_log(message.migrate_from_chat_id)}"
-                case ContentType.PINNED_MESSAGE:
-                    log_message += " pinned message"
-                case ContentType.INVOICE:
-                    log_message += f" sent invoice for <red>{message.invoice.title}</red> <green>{message.invoice.total_amount}<fg 127,127,127>(smallest unit)</fg 127,127,127> {message.invoice.currency.upper()}</green>"
-                case ContentType.SUCCESSFUL_PAYMENT:
-                    log_message += f" sent payment for <green>{message.successful_payment.total_amount}<fg 127,127,127>(smallest unit)</fg 127,127,127> {message.successful_payment.currency.upper()}</green>"
-                case ContentType.REFUNDED_PAYMENT:
-                    log_message += f" refunded payment for <green>{message.refunded_payment.total_amount}<fg 127,127,127>(smallest unit)</fg 127,127,127> {message.refunded_payment.currency.upper()}</green>"
-                case ContentType.USERS_SHARED:
-                    log_message += f" shared {', '.join(chat_log(u) for u in message.users_shared)}"
-                case ContentType.CHAT_SHARED:
-                    log_message += f" shared chat <cyan>{message.chat_shared.title or "Chat"}</cyan><blue>{message.chat_shared.chat_id}</blue>"
-                case ContentType.CHAT_BACKGROUND_SET:
-                    log_message += " set chat background"
-                case ContentType.FORUM_TOPIC_CREATED:
-                    log_message += f" created forum topic <red>{message.forum_topic_created.name}</red>"
-                case ContentType.FORUM_TOPIC_CLOSED:
-                    log_message += " closed forum topic"
-                case ContentType.FORUM_TOPIC_EDITED:
-                    log_message += " edited forum topic"
-                case ContentType.FORUM_TOPIC_REOPENED:
-                    log_message += " reopened forum topic"
-                case ContentType.GENERAL_FORUM_TOPIC_HIDDEN:
-                    log_message += " hidden forum topic"
-                case ContentType.GENERAL_FORUM_TOPIC_UNHIDDEN:
-                    log_message += " unhidden forum topic"
-                case _:
-                    log_message += f" sent a message with type <cyan>{message.content_type}</cyan>"
-
-            if message.caption:
-                caption_text = message.caption.translate(message_format_translate)
-                log_message += f" - <yellow>{caption_text}</yellow>"
+            log_message = message_content(message)
 
             if message.from_user is not None and message.from_user.id != message.chat.id:
                 log_message += (
@@ -193,7 +100,7 @@ async def logger_middleware(
 
             log_message += f" message <red>{message_reaction_updated.message_id}</red>"
 
-            if actor.id != message_reaction_updated.chat.id:
+            if actor and actor.id != message_reaction_updated.chat.id:
                 log_message += f" in chat {chat_log(message_reaction_updated.chat)}"
         case "message_reaction_count":
             message_reaction_count_updated: MessageReactionCountUpdated = cast(
@@ -229,11 +136,17 @@ async def logger_middleware(
         case "callback_query":
             callback_query: CallbackQuery = cast(CallbackQuery, event.callback_query)
 
-            query_text = callback_query.data.translate(message_format_translate)
+            log_message = f"{chat_log(callback_query.from_user)}"
 
-            log_message = f"{chat_log(callback_query.from_user)} - <yellow>{query_text}</yellow>"
+            if callback_query.data:
+                query_text = callback_query.data.translate(message_format_translate)
+                log_message += f" - <yellow>{query_text}</yellow>"
+
             if callback_query.message is not None:
-                message_text = callback_query.message.text.translate(message_format_translate)
+                if isinstance(callback_query.message, InaccessibleMessage):
+                    message_text = "Unknown text"
+                else:
+                    message_text = message_content(callback_query.message)
                 log_message += f" on message <yellow>{message_text}</yellow><fg #FF8C00>[{callback_query.message.message_id}]</fg #FF8C00>"
                 if callback_query.from_user.id != callback_query.message.chat.id:
                     log_message += f" in chat {chat_log(callback_query.message.chat)}"
@@ -272,16 +185,21 @@ async def logger_middleware(
         case "my_chat_member" | "chat_member":
             chat_member: ChatMemberUpdated = cast(ChatMemberUpdated, event.event)
 
+            assert chat_member.new_chat_member
+
             log_message = chat_log(chat_member.from_user)
             match chat_member.new_chat_member.status:
-                case "kicked":
+                case "kicked" if isinstance(chat_member.new_chat_member, ChatMemberBanned):
                     log_message += f" banned {chat_log(chat_member.new_chat_member.user)}"
-                    if chat_member.new_chat_member.until_date.timestamp() == 0:
+                    if (
+                        not chat_member.new_chat_member.until_date
+                        or chat_member.new_chat_member.until_date.timestamp() == 0
+                    ):
                         log_message += " <red>permanently</red>"
                     else:
                         log_message += f" <red>until {chat_member.new_chat_member.until_date.isoformat()}</red>"
 
-                case "left":
+                case "left" if isinstance(chat_member.new_chat_member, ChatMemberLeft):
                     log_message += f" left {chat_log(chat_member.new_chat_member.user)}"
 
                 case _:

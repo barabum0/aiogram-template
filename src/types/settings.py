@@ -8,4 +8,4 @@ class Settings(BaseSettings):
     bot_token: str
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

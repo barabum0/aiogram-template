@@ -26,7 +26,7 @@ def main() -> None:
     configure_logger()
     main_bot = AiogramBot(token=settings.bot_token)
 
-    dispatcher.update.middleware(logger_middleware)
+    dispatcher.update.middleware(logger_middleware)  # type: ignore
     dispatcher.startup.register(on_startup)
 
     dispatcher.include_router(router)

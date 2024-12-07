@@ -4,7 +4,6 @@ from aiogram.types import Update
 from loguru import logger
 
 from src.router import router
-from src.services.database import initialize_database
 from src.services.logging import configure_logger
 from src.services.middlewares.logging import logger_middleware
 from src.types.settings import settings
@@ -13,7 +12,6 @@ dispatcher = Dispatcher()
 
 
 async def on_startup(bot: AiogramBot) -> None:
-    await initialize_database()
     me = await bot.get_me()
 
     logger.info("Starting bot {bot_name}", bot_name=me.full_name)

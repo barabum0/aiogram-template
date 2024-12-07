@@ -24,6 +24,8 @@ def chat_log(chat: Union["Chat", "User", "SharedUser", None]) -> str:
     if chat is None:
         return "<red>Unknown</red>"
 
+    from aiogram.types import SharedUser
+
     t = f"<cyan>{((chat.first_name or '') + ' ' + (chat.last_name or '')).strip()}</cyan>"
     if isinstance(chat, SharedUser):
         return t + f"<blue>[{chat.user_id}]</blue>"
